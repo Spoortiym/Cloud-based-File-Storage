@@ -12,8 +12,6 @@ app.secret_key = 'your_secret_key_here'  # Change this to a secure secret key
 # Database configuration
 DATABASE = 'cloud_storage.db'
 
-port = int(os.environ.get("PORT", 5000))
-app.run(host="0.0.0.0", port=port)
 
 def get_db():
     db = sqlite3.connect(DATABASE)

@@ -1,7 +1,7 @@
 /* General Body Styling */
 body {
     font-family: 'Poppins', sans-serif;
-    background-color: #ffffff;
+    background-color: #f8f9fa;
     min-height: 100vh;
     margin: 0;
     padding: 0;
@@ -9,27 +9,44 @@ body {
 
 /* Navbar (Top Bar) */
 .navbar {
-    background: linear-gradient(135deg, #3b82f6 0%, #6366f1 100%);
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
     box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
-    padding: 0.75rem 1.5rem;
+    padding: 1rem 2rem;
 }
 
 .navbar-brand {
     font-weight: 600;
-    font-size: 1.25rem;
+    font-size: 1.5rem;
     color: #fff !important;
     display: flex;
     align-items: center;
 }
 
 .navbar-brand i {
-    margin-right: 8px;
+    font-size: 1.5rem;
+    margin-right: 10px;
 }
 
-.navbar .btn {
+.nav-link {
+    color: #fff !important;
     font-weight: 500;
-    padding: 6px 14px;
+    padding: 0.5rem 1rem !important;
+    transition: all 0.3s ease;
     border-radius: 4px;
+}
+
+.nav-link:hover {
+    background-color: rgba(255, 255, 255, 0.1);
+    transform: translateY(-1px);
+}
+
+.nav-link i {
+    margin-right: 5px;
+}
+
+/* Main Content */
+.container {
+    padding-top: 80px;
 }
 
 /* Profile button */
