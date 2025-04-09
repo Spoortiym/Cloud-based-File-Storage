@@ -19,22 +19,48 @@ def get_db():
     return db
 
 def init_db():
-    with app.app_context():
-        db = get_db()
-        try:
-            with app.open_resource('schema.sql', mode='r') as f:
-                db.cursor().executescript(f.read())
+    print("Initializing database...")
+    try:
+        # Create a new database connection
+        db = sqlite3.connect(DATABASE)
+        cursor = db.cursor()
+        
+        # Check if the users table exists
+        cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='users'")
+        table_exists = cursor.fetchone()
+        
+        if not table_exists:
+            print("Users table not found. Creating tables...")
+            # Read and execute the schema.sql file
+            with open('schema.sql', 'r') as f:
+                schema_sql = f.read()
+                print(f"Schema SQL: {schema_sql}")
+                cursor.executescript(schema_sql)
             db.commit()
-        except sqlite3.OperationalError as e:
-            if "already exists" in str(e):
-                print("Database already initialized.")
-            else:
-                raise e
+            print("Database tables created successfully.")
+        else:
+            print("Users table already exists.")
+        
+        db.close()
+    except Exception as e:
+        print(f"Error initializing database: {str(e)}")
+        raise e
 
 # Create uploads directory if it doesn't exist
 UPLOAD_FOLDER = 'uploads'
 if not os.path.exists(UPLOAD_FOLDER):
-    os.makedirs(UPLOAD_FOLDER)
+    try:
+        os.makedirs(UPLOAD_FOLDER, mode=0o755, exist_ok=True)
+        print(f"Created uploads directory: {UPLOAD_FOLDER}")
+    except Exception as e:
+        print(f"Error creating uploads directory: {str(e)}")
+        # Try with absolute path
+        try:
+            abs_path = os.path.abspath(UPLOAD_FOLDER)
+            os.makedirs(abs_path, mode=0o755, exist_ok=True)
+            print(f"Created uploads directory with absolute path: {abs_path}")
+        except Exception as e2:
+            print(f"Error creating uploads directory with absolute path: {str(e2)}")
 
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 
@@ -50,10 +76,19 @@ def get_user_upload_folder(username):
     # Create the folder if it doesn't exist
     if not os.path.exists(user_folder):
         try:
-            os.makedirs(user_folder)
+            os.makedirs(user_folder, mode=0o755, exist_ok=True)
             print(f"Created user folder: {user_folder}")
         except Exception as e:
             print(f"Error creating user folder: {str(e)}")
+            # Try an alternative approach if the first one fails
+            try:
+                # Try with absolute path
+                abs_path = os.path.abspath(user_folder)
+                os.makedirs(abs_path, mode=0o755, exist_ok=True)
+                print(f"Created user folder with absolute path: {abs_path}")
+            except Exception as e2:
+                print(f"Error creating user folder with absolute path: {str(e2)}")
+                # If both attempts fail, we'll handle this in the calling function
     
     return user_folder
 
@@ -71,30 +106,46 @@ def index():
 @app.route('/register', methods=['GET', 'POST'])
 def register():
     if request.method == 'POST':
-        username = request.form['username']
-        password = request.form['password']
-        email = request.form['email']
-        
-        db = get_db()
-        cursor = db.cursor()
-        
-        # Check if username already exists
-        cursor.execute('SELECT * FROM users WHERE username = ?', (username,))
-        if cursor.fetchone():
-            flash('Username already exists!')
+        try:
+            username = request.form['username']
+            password = request.form['password']
+            email = request.form['email']
+            
+            # Validate input
+            if not username or not password or not email:
+                flash('All fields are required!')
+                return redirect(url_for('register'))
+            
+            db = get_db()
+            cursor = db.cursor()
+            
+            # Check if username already exists
+            cursor.execute('SELECT * FROM users WHERE username = ?', (username,))
+            if cursor.fetchone():
+                flash('Username already exists!')
+                return redirect(url_for('register'))
+            
+            # Create new user
+            hashed_password = generate_password_hash(password)
+            cursor.execute('INSERT INTO users (username, password, email) VALUES (?, ?, ?)',
+                          (username, hashed_password, email))
+            db.commit()
+            
+            # Create user's upload folder
+            try:
+                user_folder = get_user_upload_folder(username)
+                print(f"Created user folder: {user_folder}")
+            except Exception as e:
+                print(f"Error creating user folder: {str(e)}")
+                # Continue with registration even if folder creation fails
+                # We'll create it when needed
+            
+            flash('Registration successful! Please login.')
+            return redirect(url_for('login'))
+        except Exception as e:
+            print(f"Registration error: {str(e)}")
+            flash(f'Registration failed: {str(e)}')
             return redirect(url_for('register'))
-        
-        # Create new user
-        hashed_password = generate_password_hash(password)
-        cursor.execute('INSERT INTO users (username, password, email) VALUES (?, ?, ?)',
-                      (username, hashed_password, email))
-        db.commit()
-        
-        # Create user's upload folder
-        user_folder = get_user_upload_folder(username)
-        
-        flash('Registration successful! Please login.')
-        return redirect(url_for('login'))
     
     return render_template('register.html')
 
@@ -400,6 +451,25 @@ def logout():
     return redirect(url_for('login'))
 
 if __name__ == '__main__':
-    init_db()  # Initialize the database
+    print("Starting application...")
+    # Initialize the database
+    try:
+        init_db()
+        print("Database initialized successfully.")
+    except Exception as e:
+        print(f"Error initializing database: {str(e)}")
+        # Try to create the database file if it doesn't exist
+        try:
+            with open(DATABASE, 'w') as f:
+                pass
+            print(f"Created empty database file: {DATABASE}")
+            # Try initialization again
+            init_db()
+            print("Database initialized successfully after creating file.")
+        except Exception as e2:
+            print(f"Failed to initialize database: {str(e2)}")
+            raise e2
+    
     port = int(os.environ.get("PORT", 5000))
-    app.run(host="0.0.0.0", port=port)
+    print(f"Starting server on port {port}...")
+    app.run(host="0.0.0.0", port=port, debug=True)
