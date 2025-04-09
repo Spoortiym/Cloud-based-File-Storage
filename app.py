@@ -14,6 +14,8 @@ DATABASE = os.path.abspath('cloud_storage.db')
 print(f"Database path: {DATABASE}")
 
 def get_db():
+    global DATABASE
+    
     # Create the database file if it doesn't exist
     if not os.path.exists(DATABASE):
         print(f"Database file {DATABASE} does not exist. Creating it...")
@@ -29,7 +31,6 @@ def get_db():
             with open(alt_database, 'w') as f:
                 pass
             print(f"Created empty database file at alternative path: {alt_database}")
-            global DATABASE
             DATABASE = alt_database
     
     try:
@@ -167,8 +168,14 @@ def register():
                 db = get_db()
             except Exception as e:
                 print(f"Database error: {str(e)}")
-                flash('Database error. Please try again later.')
-                return redirect(url_for('register'))
+                # Try to initialize the database
+                try:
+                    init_db()
+                    db = get_db()
+                except Exception as e2:
+                    print(f"Failed to initialize database: {str(e2)}")
+                    flash('Database error. Please try again later.')
+                    return redirect(url_for('register'))
             
             cursor = db.cursor()
             
@@ -505,6 +512,16 @@ def logout():
 
 if __name__ == '__main__':
     print("Starting application...")
+    
+    # Make sure the database directory exists and is writable
+    db_dir = os.path.dirname(DATABASE)
+    if not os.path.exists(db_dir):
+        try:
+            os.makedirs(db_dir, mode=0o755, exist_ok=True)
+            print(f"Created database directory: {db_dir}")
+        except Exception as e:
+            print(f"Error creating database directory: {str(e)}")
+    
     # Initialize the database
     try:
         init_db()
