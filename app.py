@@ -10,41 +10,87 @@ app = Flask(__name__)
 app.secret_key = 'your_secret_key_here'  # Change this to a secure secret key
 
 # Database configuration
-DATABASE = 'cloud_storage.db'
-
+DATABASE = os.path.abspath('cloud_storage.db')
+print(f"Database path: {DATABASE}")
 
 def get_db():
-    db = sqlite3.connect(DATABASE)
-    db.row_factory = sqlite3.Row
-    return db
-
-def init_db():
-    print("Initializing database...")
+    # Create the database file if it doesn't exist
+    if not os.path.exists(DATABASE):
+        print(f"Database file {DATABASE} does not exist. Creating it...")
+        try:
+            with open(DATABASE, 'w') as f:
+                pass
+            print(f"Created empty database file: {DATABASE}")
+        except Exception as e:
+            print(f"Error creating database file: {str(e)}")
+            # Try with a different path
+            alt_database = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'cloud_storage.db')
+            print(f"Trying alternative database path: {alt_database}")
+            with open(alt_database, 'w') as f:
+                pass
+            print(f"Created empty database file at alternative path: {alt_database}")
+            global DATABASE
+            DATABASE = alt_database
+    
     try:
-        # Create a new database connection
         db = sqlite3.connect(DATABASE)
-        cursor = db.cursor()
+        db.row_factory = sqlite3.Row
         
         # Check if the users table exists
+        cursor = db.cursor()
         cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='users'")
         table_exists = cursor.fetchone()
         
         if not table_exists:
             print("Users table not found. Creating tables...")
             # Read and execute the schema.sql file
-            with open('schema.sql', 'r') as f:
+            schema_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'schema.sql')
+            print(f"Schema path: {schema_path}")
+            with open(schema_path, 'r') as f:
                 schema_sql = f.read()
                 print(f"Schema SQL: {schema_sql}")
                 cursor.executescript(schema_sql)
             db.commit()
             print("Database tables created successfully.")
-        else:
-            print("Users table already exists.")
+        
+        return db
+    except Exception as e:
+        print(f"Error in get_db: {str(e)}")
+        raise e
+
+def init_db():
+    print("Initializing database...")
+    try:
+        # Just call get_db to ensure the database and tables are created
+        db = get_db()
+        
+        # Verify that the users table exists
+        cursor = db.cursor()
+        cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='users'")
+        table_exists = cursor.fetchone()
+        
+        if not table_exists:
+            print("Users table still not found after get_db. Trying direct creation...")
+            # Try to create the table directly
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS users (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    username TEXT UNIQUE NOT NULL,
+                    password TEXT NOT NULL,
+                    email TEXT NOT NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
+            db.commit()
+            print("Users table created directly.")
         
         db.close()
+        print("Database initialized successfully.")
     except Exception as e:
         print(f"Error initializing database: {str(e)}")
-        raise e
+        # Don't raise the exception, just log it
+        # This allows the application to start even if there's a database error
+        # The database will be created when needed
 
 # Create uploads directory if it doesn't exist
 UPLOAD_FOLDER = 'uploads'
@@ -116,7 +162,14 @@ def register():
                 flash('All fields are required!')
                 return redirect(url_for('register'))
             
-            db = get_db()
+            # Ensure database is initialized
+            try:
+                db = get_db()
+            except Exception as e:
+                print(f"Database error: {str(e)}")
+                flash('Database error. Please try again later.')
+                return redirect(url_for('register'))
+            
             cursor = db.cursor()
             
             # Check if username already exists
@@ -458,17 +511,7 @@ if __name__ == '__main__':
         print("Database initialized successfully.")
     except Exception as e:
         print(f"Error initializing database: {str(e)}")
-        # Try to create the database file if it doesn't exist
-        try:
-            with open(DATABASE, 'w') as f:
-                pass
-            print(f"Created empty database file: {DATABASE}")
-            # Try initialization again
-            init_db()
-            print("Database initialized successfully after creating file.")
-        except Exception as e2:
-            print(f"Failed to initialize database: {str(e2)}")
-            raise e2
+        # Continue anyway, the database will be created when needed
     
     port = int(os.environ.get("PORT", 5000))
     print(f"Starting server on port {port}...")
